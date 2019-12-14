@@ -6,7 +6,7 @@
 .data
 
 printNumFmt:
-  .string "%d\n"
+  .string "%lu\n"
 
 .text
 
@@ -15,8 +15,8 @@ main:
   addi sp, sp, -16
   sd ra, 0(sp)
 
-  # u64 n = 5
-  li t0, 5
+  # u64 n = 13
+  li t0, 13
   sd t0, 8(sp)
 
   # printf(printNumFmt, n)
