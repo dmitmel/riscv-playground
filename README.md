@@ -28,23 +28,32 @@ make
 ## Running
 
 ```bash
-qemu-riscv64 path/to/executable
+cd build
+# Make ensures that the executable has been built:
+make run_<executable>
+# or:
+qemu-riscv64 <executable>
 ```
 
 ## Debugging
 
 ```bash
-# in one terminal:
-qemu-riscv64 -g 1234 path/to/executable
+# in both terminals:
+cd build
 
-# and in another one:
-riscv64-linux-gnu-gdb -ex 'target remote :1234' path/to/executable
+# in the first terminal:
+QEMU_GDB=1234 make run_<executable>
+# or:
+qemu-riscv64 -g 1234 <executable>
+
+# and in the second one:
+riscv64-linux-gnu-gdb -ex 'target remote :1234' <executable>
 ```
 
 ## Useful resources
 
 - [Official RISC-V manual](https://content.riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf)
-- [RISC-V Calling Convention](https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf)
+- [RISC-V calling convention](https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf)
 - [Unofficial RISC-V reference card](https://www.cl.cam.ac.uk/teaching/1617/ECAD+Arch/files/docs/RISCVGreenCardv8-20151013.pdf)
 - [Unofficial RISC-V reference card by James Zhu](https://github.com/jameslzhu/riscv-card/blob/master/riscv-card.pdf)
 - [RISC-V instruction set reference from rv8](https://rv8.io/isa.html)
