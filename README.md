@@ -38,7 +38,7 @@ qemu-riscv64 path/to/executable
 qemu-riscv64 -g 1234 path/to/executable
 
 # and in another one:
-riscv64-linux-gnu-gdb path/to/executable -ex 'target remote :1234'
+riscv64-linux-gnu-gdb -ex 'target remote :1234' path/to/executable
 ```
 
 ## Useful resources

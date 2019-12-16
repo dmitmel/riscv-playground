@@ -47,8 +47,8 @@ factorial:
   addi sp, sp, -8
   sd ra, 0(sp)
 
-  addi t0, zero, 1  # u64 result = 1
-  addi t1, zero, 1  # u64 one = 1
+  li t0, 1  # u64 result = 1
+  li t1, 1  # u64 one = 1
   factorial_loop_start:
     bgeu t1, a0, factorial_loop_end  # goto factorial_loop_end if n <= one
     mul t0, t0, a0                   # result *= n
