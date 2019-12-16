@@ -9,13 +9,14 @@
 
 /* u64 */ grid_width:  .dword 20
 /* u64 */ grid_height: .dword 10
-/* u8* */ grid_data: /* = NULL */ .dword 0
+/* u8[] */ grid_data: /* = NULL */ .dword 0
 
 .text
 
 
 .global main
 main:
+  # i8 main(i8 argc, char* argv[])
   addi sp, sp, -8
   sd ra, 0(sp)
 
@@ -24,7 +25,7 @@ main:
   call time
   call srand
 
-  # u8* grid_data = calloc(grid_width * grid_height, sizeof(u8))
+  # grid_data = calloc(grid_width * grid_height, sizeof(u8))
   ld t0, grid_width
   ld t1, grid_height
   mul a0, t0, t1
@@ -52,6 +53,7 @@ main:
 
 
 grid_fill_randomly:
+  # void grid_fill_randomly()
   addi sp, sp, -32
   sd ra,  0(sp)
   sd s1,  8(sp)
@@ -92,6 +94,7 @@ grid_fill_randomly:
 
 
 grid_print:
+  # void grid_print()
   addi sp, sp, -48
   sd ra,  0(sp)
   sd s1,  8(sp)
