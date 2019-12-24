@@ -287,7 +287,7 @@ grid_next_generation:
       # break if x >= grid_width
       bgeu s4, s2, grid_next_generation_for_y_end
 
-      # let ns: u8 = grid_count_alive_neighbors(x, y)
+      # let n: u8 = grid_count_alive_neighbors(x, y)
       mv a0, s4
       mv a1, s5
       call grid_count_alive_neighbors
@@ -297,9 +297,9 @@ grid_next_generation:
       andi t0, t0, 1
 
       # let next_cell: u8 = if cell != 0 {
-      #   if ns == 2 || ns == 3 { 1 } else { 0 }
+      #   if n == 2 || n == 3 { 1 } else { 0 }
       # } else {
-      #   if ns == 3 { 1 } else { 0 }
+      #   if n == 3 { 1 } else { 0 }
       # }
       #
 
@@ -351,7 +351,6 @@ grid_next_generation:
   ret
 
 
-.global grid_get
 grid_get:
   # fn grid_get(i64 x, i64 y) -> u8
   addi sp, sp, -16
@@ -438,4 +437,59 @@ grid_check_signed_coordinates:
 
   grid_check_signed_coordinates_out_of_bounds:
     li a0, 0
+    ret
+
+
+grid_count_alive_neighbors:
+  # fn grid_count_alive_neighbors(x: u64, y: u64) -> u8
+  addi sp, sp, -32
+  sd ra,  0(sp)
+  sd s1,  8(sp)
+  sd s2, 16(sp)
+  sd s3, 24(sp)
+
+  mv s1, a0
+  mv s2, a1
+  li s3, 0   # let n: u8 = 0
+
+  #                                                 # relative coordinates
+  addi s2, s2, -1                        # y -= 1   # (-1;  0)
+  call grid_count_alive_neighbors_check
+  addi s1, s1, 1                         # x += 1   # (-1;  1)
+  call grid_count_alive_neighbors_check
+  addi s2, s2, 1                         # y += 1   # ( 0;  1)
+  call grid_count_alive_neighbors_check
+  addi s2, s2, 1                         # y += 1   # ( 1;  1)
+  call grid_count_alive_neighbors_check
+  addi s1, s1, -1                        # x -= 1   # ( 1;  0)
+  call grid_count_alive_neighbors_check
+  addi s1, s1, -1                        # x -= 1   # ( 1; -1)
+  call grid_count_alive_neighbors_check
+  addi s2, s2, -1                        # y -= 1   # ( 0; -1)
+  call grid_count_alive_neighbors_check
+  addi s2, s2, -1                        # y -= 1   # (-1; -1)
+  call grid_count_alive_neighbors_check
+
+  # return n
+  mv a0, s3
+
+  ld ra,  0(sp)
+  ld s1,  8(sp)
+  ld s2, 16(sp)
+  ld s3, 24(sp)
+  addi sp, sp, 32
+  ret
+
+  # n += grid_get(x, y)
+  grid_count_alive_neighbors_check:
+    addi sp, sp, -16
+    sd ra, 0(sp)
+
+    mv a0, s1
+    mv a1, s2
+    call grid_get
+    add s3, s3, a0
+
+    ld ra, 0(sp)
+    addi sp, sp, 16
     ret

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
 
 set(CMAKE_TOOLCHAIN_FILE riscv64-linux-gnu.toolchain.cmake)
-project(riscv-playground ASM C)
+project(riscv-playground ASM)
 
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
 
@@ -24,4 +24,4 @@ function(my_add_executable name)
 endfunction()
 
 my_add_executable(factorial src/factorial.s)
-my_add_executable(game_of_life src/game_of_life.s src/game_of_life_utils.c)
+my_add_executable(game_of_life src/game_of_life.s)
