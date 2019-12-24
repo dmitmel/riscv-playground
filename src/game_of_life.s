@@ -47,27 +47,29 @@ main:
   la a1, 0
   call printf
 
-  li a0, 2
-  li a1, 1
-  li a2, 1
-  call grid_set
-  li a0, 3
-  li a1, 2
-  li a2, 1
-  call grid_set
-  li a0, 1
-  li a1, 3
-  li a2, 1
-  call grid_set
-  li a0, 2
-  li a1, 3
-  li a2, 1
-  call grid_set
-  li a0, 3
-  li a1, 3
-  li a2, 1
-  call grid_set
-  # call grid_fill_randomly
+  # uncomment for glider:
+  # li a0, 2
+  # li a1, 1
+  # li a2, 1
+  # call grid_set
+  # li a0, 3
+  # li a1, 2
+  # li a2, 1
+  # call grid_set
+  # li a0, 1
+  # li a1, 3
+  # li a2, 1
+  # call grid_set
+  # li a0, 2
+  # li a1, 3
+  # li a2, 1
+  # call grid_set
+  # li a0, 3
+  # li a1, 3
+  # li a2, 1
+  # call grid_set
+
+  call grid_fill_randomly
   call grid_print
 
   # putchar('\n')
