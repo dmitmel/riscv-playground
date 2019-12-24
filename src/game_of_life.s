@@ -79,6 +79,13 @@ main:
   li s1, 1  # let gen_index: u64 = 1
   main_loop_start:
 
+    # usleep(NEXT_GENERATION_SLEEP_TIME)
+    # NOTE: usleep is deprectated, I might update this to use nanosleep in the
+    #       future. Here is an example of a function that sleeps for requested
+    #       time in milliseconds: https://stackoverflow.com/a/1157217/12005228
+    ld a0, NEXT_GENERATION_SLEEP_TIME
+    call usleep
+
     # printf(STR_FMT_GENERATION, gen_index)
     la a0, STR_FMT_GENERATION
     mv a1, s1
@@ -91,13 +98,6 @@ main:
     # putchar('\n')
     li a0, '\n'
     call putchar
-
-    # usleep(NEXT_GENERATION_SLEEP_TIME)
-    # NOTE: usleep is deprectated, I might update this to use nanosleep in the
-    #       future. Here is an example of a function that sleeps for requested
-    #       time in milliseconds: https://stackoverflow.com/a/1157217/12005228
-    ld a0, NEXT_GENERATION_SLEEP_TIME
-    call usleep
 
     addi s1, s1, 1
     j main_loop_start
