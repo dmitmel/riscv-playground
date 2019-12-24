@@ -265,13 +265,48 @@ grid_next_generation:
       # break if x >= grid_width
       bgeu s4, s2, grid_next_generation_loop1_end
 
-      # let cell: u8 = *cell_ptr & 1
-      lb a0, 0(s1)
-      andi a0, a0, 1
+      # let neighbors: u8 = grid_count_live_neighbors(x, y)
+      mv a0, s4
+      mv a1, s5
+      call grid_count_live_neighbors
 
-      # *next_cell_ptr = cell ^ 1
-      xor a0, a0, 1
-      sb a0, 0(s6)
+      # let cell: u8 = *cell_ptr & 1
+      lb t0, 0(s1)
+      andi t0, t0, 1
+
+      # let next_cell: u8 = if cell != 0 {
+      #   if neighbors == 2 || neighbors == 3 { 1 } else { 0 }
+      # } else {
+      #   if neighbors == 3 { 1 } else { 0 }
+      # }
+      #
+
+      beqz t0, grid_next_generation_if_cell_dead
+      grid_next_generation_if_cell_alive:
+
+        li t2, 2
+        beq a0, t2, grid_next_generation_set_cell_alive
+        li t2, 3
+        beq a0, t2, grid_next_generation_set_cell_alive
+        j grid_next_generation_set_cell_dead
+
+      grid_next_generation_if_cell_dead:
+
+        li t2, 3
+        beq a0, t2, grid_next_generation_set_cell_alive
+        j grid_next_generation_set_cell_dead
+
+      grid_next_generation_set_cell_alive:
+        li t1, 1
+        j grid_next_generation_if_end
+
+      grid_next_generation_set_cell_dead:
+        li t1, 0
+
+      grid_next_generation_if_end:
+
+      # *next_cell_ptr = cell
+      sb t1, 0(s6)
 
       addi s1, s1, 1  # cell_ptr += 1
       addi s6, s6, 1  # next_cell_ptr += 1
@@ -292,4 +327,15 @@ grid_next_generation:
   ld s5, 40(sp)
   ld s6, 48(sp)
   addi sp, sp, 64
+  ret
+
+grid_count_live_neighbors:
+  # fn grid_count_live_neighbors(x: u64, y: u64) -> u8
+  addi sp, sp, -8
+  sd ra, 0(sp)
+
+  li a0, 2
+
+  ld ra, 0(sp)
+  addi sp, sp, 8
   ret
