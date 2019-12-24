@@ -114,7 +114,7 @@ grid_alloc_data_unsafe:
 
 grid_swap:
   # fn grid_swap()
-  addi sp, sp, -8
+  addi sp, sp, -16
   sd ra, 0(sp)
 
   # grid_data, grid_next_data = grid_next_data, grid_data
@@ -126,7 +126,7 @@ grid_swap:
   sd t1, 0(t2)
 
   ld ra, 0(sp)
-  addi sp, sp, 8
+  addi sp, sp, 16
   ret
 
 
@@ -171,7 +171,7 @@ grid_fill_randomly:
 
 grid_print:
   # fn grid_print()
-  addi sp, sp, -48
+  addi sp, sp, -64
   sd ra,  0(sp)
   sd s1,  8(sp)
   sd s2, 16(sp)
@@ -230,13 +230,13 @@ grid_print:
   ld s3, 24(sp)
   ld s4, 32(sp)
   ld s5, 40(sp)
-  addi sp, sp, 48
+  addi sp, sp, 64
   ret
 
 
 grid_next_generation:
   # fn grid_next_generation()
-  addi sp, sp, -56
+  addi sp, sp, -64
   sd ra,  0(sp)
   sd s1,  8(sp)
   sd s2, 16(sp)
@@ -288,5 +288,5 @@ grid_next_generation:
   ld s4, 32(sp)
   ld s5, 40(sp)
   ld s6, 48(sp)
-  addi sp, sp, 56
+  addi sp, sp, 64
   ret
