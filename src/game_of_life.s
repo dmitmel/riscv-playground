@@ -14,8 +14,8 @@
 /* char* */ STR_CELL_ALIVE: .string "\xE2\x96\x88\xE2\x96\x88"
 /* char* */ STR_CELL_DEAD:  .string "  "
 
-/* u64 */ grid_width:  .dword 20
-/* u64 */ grid_height: .dword 20
+/* u64 */ grid_width:  .dword 32
+/* u64 */ grid_height: .dword 32
 /* [u8] */ grid_data:      /* = NULL */ .dword 0
 /* [u8] */ grid_next_data: /* = NULL */ .dword 0
 
@@ -47,7 +47,27 @@ main:
   la a1, 0
   call printf
 
-  call grid_fill_randomly
+  li a0, 2
+  li a1, 1
+  li a2, 1
+  call grid_set
+  li a0, 3
+  li a1, 2
+  li a2, 1
+  call grid_set
+  li a0, 1
+  li a1, 3
+  li a2, 1
+  call grid_set
+  li a0, 2
+  li a1, 3
+  li a2, 1
+  call grid_set
+  li a0, 3
+  li a1, 3
+  li a2, 1
+  call grid_set
+  # call grid_fill_randomly
   call grid_print
 
   # putchar('\n')
@@ -267,19 +287,19 @@ grid_next_generation:
       # break if x >= grid_width
       bgeu s4, s2, grid_next_generation_for_y_end
 
-      # let neighbors: u8 = grid_count_live_neighbors(x, y)
+      # let ns: u8 = grid_count_alive_neighbors(x, y)
       mv a0, s4
       mv a1, s5
-      call grid_count_live_neighbors
+      call grid_count_alive_neighbors
 
       # let cell: u8 = *cell_ptr & 1
       lb t0, 0(s1)
       andi t0, t0, 1
 
       # let next_cell: u8 = if cell != 0 {
-      #   if neighbors == 2 || neighbors == 3 { 1 } else { 0 }
+      #   if ns == 2 || ns == 3 { 1 } else { 0 }
       # } else {
-      #   if neighbors == 3 { 1 } else { 0 }
+      #   if ns == 3 { 1 } else { 0 }
       # }
       #
 
@@ -330,13 +350,92 @@ grid_next_generation:
   addi sp, sp, 64
   ret
 
-grid_count_live_neighbors:
-  # fn grid_count_live_neighbors(x: u64, y: u64) -> u8
-  addi sp, sp, -8
+
+.global grid_get
+grid_get:
+  # fn grid_get(i64 x, i64 y) -> u8
+  addi sp, sp, -16
   sd ra, 0(sp)
 
-  li a0, 2
+  # let cell_ptr: u8* = grid_get_ptr(x, y)
+  call grid_get_ptr
 
-  ld ra, 0(sp)
-  addi sp, sp, 8
+  # return 0 if cell_ptr == NULL
+  beqz a0, grid_get_end
+
+  # return *cell_ptr & 1
+  lb a0, 0(a0)
+  andi a0, a0, 1
+
+  grid_get_end:
+    ld ra, 0(sp)
+    addi sp, sp, 16
+    ret
+
+
+grid_set:
+  # fn grid_set(i64 x, i64 y, u8 value)
+  addi sp, sp, -16
+  sd ra, 0(sp)
+  sb a2, 8(sp)
+
+  # let cell_ptr: u8* = grid_get_ptr(x, y)
+  call grid_get_ptr
+
+  # return if cell_ptr == NULL
+  beqz a0, grid_set_end
+
+  # *cell_ptr = value & 1
+  lb t0, 8(sp)
+  andi t0, t0, 1
+  sb t0, 0(a0)
+
+  grid_set_end:
+    ld ra, 0(sp)
+    addi sp, sp, 16
+    ret
+
+grid_get_ptr:
+  # fn grid_get_ptr(i64 x, i64 y) -> u8*
+  addi sp, sp, -32
+  sd ra,  0(sp)
+  sd a0,  8(sp)
+  sd a1, 16(sp)
+
+  # return 0 if grid_check_signed_coordinates(x, y) == 0
+  call grid_check_signed_coordinates
+  beqz a0, grid_get_ptr_end
+
+  ld a0,  8(sp)
+  ld a1, 16(sp)
+
+  # return grid_data + (grid_width * y + x)
+  ld t0, grid_width
+  mul t0, t0, a1
+  add a0, t0, a0
+  ld t0, grid_data
+  add a0, a0, t0
+
+  grid_get_ptr_end:
+    ld ra, 0(sp)
+    addi sp, sp, 32
+    ret
+
+
+grid_check_signed_coordinates:
+  # fn grid_check_signed_coordinates(x: i64, y: i64) -> u8
+
+  # return if x < 0 || y < 0 || x >= grid_width || y >= grid_height { 0 } else { 1 }
+  blt a0, zero, grid_check_signed_coordinates_out_of_bounds
+  blt a1, zero, grid_check_signed_coordinates_out_of_bounds
+  ld t0, grid_height
+  bge a1, t0, grid_check_signed_coordinates_out_of_bounds
+  ld t0, grid_width
+  bge a0, t0, grid_check_signed_coordinates_out_of_bounds
+
+  li a0, 1
   ret
+
+  grid_check_signed_coordinates_out_of_bounds:
+    li a0, 0
+    ret
