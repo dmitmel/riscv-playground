@@ -8,15 +8,18 @@
 
 .data
 
-/* char* */ str_fmt_generation: .string "generation #%lu:\n"
+/* char* */ STR_FMT_GENERATION: .string "generation #%lu:\n"
+# UTF-8 representation of two FULL BLOCK (U+2588) unicode characters
+# https://www.fileformat.info/info/unicode/char/2588/index.htm
+/* char* */ STR_CELL_ALIVE: .string "\xE2\x96\x88\xE2\x96\x88"
+/* char* */ STR_CELL_DEAD:  .string "  "
 
 /* u64 */ grid_width:  .dword 20
-/* u64 */ grid_height: .dword 10
+/* u64 */ grid_height: .dword 20
 /* [u8] */ grid_data:      /* = NULL */ .dword 0
 /* [u8] */ grid_next_data: /* = NULL */ .dword 0
 
 /* u64 */ NEXT_GENERATION_SLEEP_TIME: .dword 200 * 1000 /* microseconds */
-
 
 .text
 
@@ -39,8 +42,8 @@ main:
   la a0, grid_next_data
   call grid_alloc_data_unsafe
 
-  # printf(str_fmt_generation, 0)
-  la a0, str_fmt_generation
+  # printf(STR_FMT_GENERATION, 0)
+  la a0, STR_FMT_GENERATION
   la a1, 0
   call printf
 
@@ -52,10 +55,10 @@ main:
   call putchar
 
   li s1, 1  # let gen_index: u64 = 1
-  main_loop0_start:
+  main_loop_start:
 
-    # printf(str_fmt_generation, gen_index)
-    la a0, str_fmt_generation
+    # printf(STR_FMT_GENERATION, gen_index)
+    la a0, STR_FMT_GENERATION
     mv a1, s1
     call printf
 
@@ -75,8 +78,8 @@ main:
     call usleep
 
     addi s1, s1, 1
-    j main_loop0_start
-  main_loop0_end:
+    j main_loop_start
+  main_loop_end:
 
   # free(grid_data)
   ld a0, grid_data
@@ -148,9 +151,9 @@ grid_fill_randomly:
   mul s2, t0, t1
   li s3, 0  # let i: u64 = 0
 
-  grid_fill_randomly_loop0_start:
+  grid_fill_randomly_loop_start:
     # break if i >= len
-    bgeu s3, s2, grid_fill_randomly_loop0_end
+    bgeu s3, s2, grid_fill_randomly_loop_end
 
     # let cell: u8 = rand() & 1
     call rand
@@ -161,8 +164,8 @@ grid_fill_randomly:
     sb a0, 0(t0)
 
     addi s3, s3, 1  # i += 1
-    j grid_fill_randomly_loop0_start
-  grid_fill_randomly_loop0_end:
+    j grid_fill_randomly_loop_start
+  grid_fill_randomly_loop_end:
 
   ld ra,  0(sp)
   ld s1,  8(sp)
@@ -188,44 +191,43 @@ grid_print:
   li s4, 0            # let x: u64 = 0
   li s5, 0            # let y: u64 = 0
 
-  grid_print_loop0_start:
+  grid_print_for_x_start:
     # break if y >= grid_height
-    bgeu s5, s3, grid_print_loop0_end
+    bgeu s5, s3, grid_print_for_x_end
 
     li s4, 0  # x = 0
 
-    grid_print_loop1_start:
+    grid_print_for_y_start:
       # break if x >= grid_width
-      bgeu s4, s2, grid_print_loop1_end
+      bgeu s4, s2, grid_print_for_y_end
 
       # let cell: u8 = *cell_ptr & 1
-      lb a0, 0(s1)
-      andi a0, a0, 1
+      lb t0, 0(s1)
+      andi t0, t0, 1
+
+      # use an `if` shorthand here to save some instructions
+      # let s: char* = STR_CELL_DEAD
+      la a0, STR_CELL_DEAD
+      # if (t0 != 0) s = STR_CELL_ALIVE
+      beqz t0, grid_print_if_end
+      la a0, STR_CELL_ALIVE
+      grid_print_if_end:
+      # fputs(s, stdout)
+      ld a1, stdout
+      call fputs
 
       addi s1, s1, 1  # cell_ptr += 1
-
-      # Here I'm using a little trick to avoid branching: first, I multiply cell
-      # value by distance from the character # to space (# is located later in
-      # the ASCII table than space). Cells can contain either 0 or 1, so the
-      # product will either be zero or that distance. Then I add the value of
-      # space, so now the sum is the ASCII value of either space or #.
-      # putchar(('#' - ' ') * cell + ' ')
-      li t0, '#' - ' '
-      mul a0, a0, t0
-      addi a0, a0, ' '
-      call putchar
-
       addi s4, s4, 1  # x += 1
-      j grid_print_loop1_start
-    grid_print_loop1_end:
+      j grid_print_for_y_start
+    grid_print_for_y_end:
 
     # putchar('\n')
     li a0, '\n'
     call putchar
 
     addi s5, s5, 1  # y += 1
-    j grid_print_loop0_start
-  grid_print_loop0_end:
+    j grid_print_for_x_start
+  grid_print_for_x_end:
 
   ld ra,  0(sp)
   ld s1,  8(sp)
@@ -255,15 +257,15 @@ grid_next_generation:
   li s5, 0               # let y: u64 = 0
   ld s6, grid_next_data  # let next_cell_ptr: u8* = grid_next_data
 
-  grid_next_generation_loop0_start:
+  grid_next_generation_for_x_start:
     # break if y >= grid_height
-    bgeu s5, s3, grid_next_generation_loop0_end
+    bgeu s5, s3, grid_next_generation_for_x_end
 
     li s4, 0  # x = 0
 
-    grid_next_generation_loop1_start:
+    grid_next_generation_for_y_start:
       # break if x >= grid_width
-      bgeu s4, s2, grid_next_generation_loop1_end
+      bgeu s4, s2, grid_next_generation_for_y_end
 
       # let neighbors: u8 = grid_count_live_neighbors(x, y)
       mv a0, s4
@@ -310,14 +312,13 @@ grid_next_generation:
 
       addi s1, s1, 1  # cell_ptr += 1
       addi s6, s6, 1  # next_cell_ptr += 1
-
       addi s4, s4, 1  # x += 1
-      j grid_next_generation_loop1_start
-    grid_next_generation_loop1_end:
+      j grid_next_generation_for_y_start
+    grid_next_generation_for_y_end:
 
     addi s5, s5, 1  # y += 1
-    j grid_next_generation_loop0_start
-  grid_next_generation_loop0_end:
+    j grid_next_generation_for_x_start
+  grid_next_generation_for_x_end:
 
   ld ra,  0(sp)
   ld s1,  8(sp)
