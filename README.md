@@ -60,3 +60,4 @@ riscv64-linux-gnu-gdb -ex 'target remote :1234' <executable>
 - [GNU `as` manual](https://sourceware.org/binutils/docs/as/)
 - ["Hello World" tutorial from RARS](https://github.com/TheThirdOne/rars/wiki/Creating-Hello-World)
 - [Fundamentals of RISC-V assembly from RARS](https://github.com/TheThirdOne/rars/wiki/Fundementals-of-RISC-V-Assembly)
+- [MIPS Assembly/Control Flow Instructions](https://en.wikibooks.org/wiki/MIPS_Assembly/Control_Flow_Instructions)
