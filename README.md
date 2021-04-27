@@ -19,10 +19,8 @@ sudo pacman -S cmake make qemu{,-arch-extra} riscv64-linux-gnu-{gcc,gdb}
 ## Compiling
 
 ```bash
-mkdir build
-cd build
-cmake -D CMAKE_BUILD_TYPE=Debug ..
-make
+cmake -D CMAKE_BUILD_TYPE=Debug -B build
+cmake --build build
 ```
 
 ## Running

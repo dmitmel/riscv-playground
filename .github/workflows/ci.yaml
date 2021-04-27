@@ -1,0 +1,16 @@
+name: CI
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: install riscv64-linux-gnu toolchain
+        run: sudo apt-get install gcc-riscv64-linux-gnu
+      - name: configure
+        run: cmake -D CMAKE_BUILD_TYPE=Debug -B build
+      - name: build
+        run: cmake --build build
