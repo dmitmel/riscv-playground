@@ -25,4 +25,4 @@ endfunction()
 
 my_add_executable(factorial src/factorial.s)
 my_add_executable(game_of_life src/game_of_life.s)
-my_add_executable(brainfuck src/brainfuck.s src/brainfuck_helpers.c)
+my_add_executable(brainfuck src/brainfuck.s)
