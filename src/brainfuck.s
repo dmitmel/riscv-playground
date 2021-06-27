@@ -10,12 +10,14 @@
 
 .data
 
-/*   *u8 */ program_memory_ptr: /* = NULL */ .dword 0
-/* usize */ program_head_addr:  /* = 0    */ .dword 0
+/*    *u8 */ program_memory_ptr: /* = NULL */ .dword 0
+/*  usize */ program_head_addr:  /* = 0    */ .dword 0
 
-/* *char */ program_text:       /* = NULL */ .dword 0
-/* usize */ program_len:        /* = 0    */ .dword 0
-/* usize */ program_curr_char:  /* = 0    */ .dword 0
+/*  *char */ program_text:       /* = NULL */ .dword 0
+/*  usize */ program_len:        /* = 0    */ .dword 0
+/*  usize */ program_curr_char:  /* = 0    */ .dword 0
+
+/* *usize */ program_loop_jumps: /* = NULL */ .dword 0
 
 .section .rodata
 
@@ -62,6 +64,15 @@ main:
   sd a0, 0(t0)
   mv s2, a0
 
+  # program_loop_jumps = malloc(sizeof(size_t) * program_len)
+  slli a0, s2, 3
+  call malloc
+  la t0, program_loop_jumps
+  sd a0, 0(t0)
+
+  # analyze_program()
+  call analyze_program
+
   # program_memory_ptr = calloc(PROGRAM_MEMORY_LEN, 1)
   ld a0, PROGRAM_MEMORY_LEN
   li a1, 1
@@ -88,6 +99,10 @@ main:
     j main_for_i_start
   main_for_i_end:
 
+  # free(program_loop_jumps)
+  ld a0, program_loop_jumps
+  call free
+
   # free(program_memory_ptr)
   ld a0, program_memory_ptr
   call free
@@ -101,6 +116,127 @@ main:
     ld s3, 24(sp)
     addi sp, sp, 32
     ret
+
+analyze_program:
+  # fn analyze_program()
+  addi sp, sp, -80
+  sd ra,  0(sp)
+  sd s1,  8(sp)  # program_text
+  sd s2, 16(sp)  # program_len
+  sd s3, 24(sp)  # i
+  sd s4, 32(sp)  # jump_stack_cap
+  sd s5, 40(sp)  # jump_stack_len
+  sd s6, 48(sp)  # jump_stack
+  sd s7, 56(sp)  # chr
+  sd s8, 64(sp)  # jump_index
+  sd s9, 72(sp)  # program_loop_jumps
+
+  ld s1, program_text
+  ld s2, program_len
+  ld s9, program_loop_jumps
+
+  # memset(program_loop_jumps, 0xff, sizeof(size_t) * program_len)
+  mv a0, s9
+  li a1, 0xff
+  slli a2, s2, 3
+  call memset
+
+  # the default value of jump stack's capacity may be arbitrary
+  li s4, 8  # let jump_stack_cap: usize = 8
+  li s5, 0  # let jump_stack_len: usize = 0
+
+  # let jump_stack: *usize = malloc(sizeof(usize) * jump_stack_cap)
+  slli a0, s4, 3
+  call malloc
+  mv s6, a0
+
+  li s3, 0  # let i: usize = 0
+  analyze_program_for_i:
+    # break if i >= program_len
+    bgeu s3, s2, analyze_program_for_i_end
+
+    # let chr: char = program_text[i]
+    add t0, s1, s3
+    lbu s7, 0(t0)
+
+    li t0, '['
+    beq s7, t0, analyze_program_if_loop_begin  # goto loop_begin if chr == '['
+    li t0, ']'
+    beq s7, t0, analyze_program_if_loop_end    # goto loop_end if chr == ']'
+    j analyze_program_if_end
+
+    # if chr == '['
+    analyze_program_if_loop_begin:
+
+      # if jump_stack_len >= jump_stack_cap
+      bltu s5, s4, analyze_program_if_loop_begin_if_end
+      analyze_program_if_loop_begin_if:
+
+        slli s4, s4, 1  # jump_stack_cap *= 2
+
+        # jump_stack = realloc(jump_stack, sizeof(size_t) * jump_stack_cap)
+        mv a0, s6
+        slli a1, s4, 3
+        call realloc
+        mv s6, a0
+
+      analyze_program_if_loop_begin_if_end:
+
+      # jump_stack[jump_stack_len] = i
+      slli t0, s5, 3
+      add t0, s6, t0
+      sd s3, 0(t0)
+
+      addi s5, s5, 1  # jump_stack_len += 1
+
+      j analyze_program_if_end
+
+    # if chr == ']'
+    analyze_program_if_loop_end:
+
+      # syntax_error() if jump_stack_len <= 0
+      bgeu zero, s5, syntax_error
+
+      addi s5, s5, -1  # jump_stack_len -= 1
+
+      # let jump_index: usize = jump_stack[jump_stack_len]
+      slli t0, s5, 3
+      add t0, s6, t0
+      ld s8, 0(t0)
+
+      # program_loop_jumps[i] = jump_index
+      slli t0, s3, 3
+      add t0, s9, t0
+      sd s8, 0(t0)
+
+      # program_loop_jumps[jump_index] = i
+      slli t0, s8, 3
+      add t0, s9, t0
+      sd s3, 0(t0)
+
+    analyze_program_if_end:
+
+    addi s3, s3, 1  # i += 1
+    j analyze_program_for_i
+  analyze_program_for_i_end:
+
+  # free(jump_stack)
+  mv a0, s6
+  call free
+
+  ld ra,  0(sp)
+  ld s1,  8(sp)
+  ld s2, 16(sp)
+  ld s3, 24(sp)
+  ld s4, 32(sp)
+  ld s5, 40(sp)
+  ld s6, 48(sp)
+  ld s7, 56(sp)
+  ld s8, 64(sp)
+  ld s9, 72(sp)
+  addi sp, sp, 80
+  ret
+
 
 process_command:
   # fn process_command(cmd: char)
@@ -274,40 +410,9 @@ command_loop_begin:
   ld t1, program_head_addr
   add t0, t0, t1
   lbu t1, 0(t0)
-  bnez t1, command_loop_begin_end
+  bnez t1, command_loop_common_end
 
-  li t0, 1                  # let brackets: i64 = 1
-  ld t1, program_text
-  ld t2, program_curr_char  # let i = program_curr_char
-  ld t5, program_len
-  command_loop_begin_while_brackets:
-    bgeu zero, t0, command_loop_begin_while_brackets_end  # break if brackets <= 0
-
-    addi t2, t2, 1  # i += 1
-    add t3, t1, t2
-    bgeu t2, t5, syntax_error  # syntax_error() if i >= program_len
-    lbu t3, 0(t3)   # let chr = program_text[program_curr_char]
-
-    li t4, '['
-    beq t3, t4, command_loop_begin_inc_brackets  # brackets += 1 if chr == '['
-    li t4, ']'
-    beq t3, t4, command_loop_begin_dec_brackets  # brackets -= 1 if chr == ']'
-    j command_loop_begin_while_brackets
-
-    command_loop_begin_inc_brackets:
-      addi t0, t0, 1
-      j command_loop_begin_while_brackets
-    command_loop_begin_dec_brackets:
-      addi t0, t0, -1
-      j command_loop_begin_while_brackets
-
-  command_loop_begin_while_brackets_end:
-
-  la t1, program_curr_char
-  sd t2, 0(t1)  # program_curr_char = i
-
-  command_loop_begin_end:
-    ret
+  j command_loop_common
 
 command_loop_end:
   # fn command_loop_end()
@@ -317,39 +422,19 @@ command_loop_end:
   ld t1, program_head_addr
   add t0, t0, t1
   lbu t1, 0(t0)
-  beqz t1, command_loop_end_end
+  beqz t1, command_loop_common_end
 
-  li t0, 1                  # let brackets: i64 = 1
-  ld t1, program_text
-  ld t2, program_curr_char  # let i = program_curr_char
-  command_loop_end_while_brackets:
-    bgeu zero, t0, command_loop_end_while_brackets_end  # break if brackets <= 0
-
-    bgeu zero, t2, syntax_error  # syntax_error() if i <= 0
-    addi t2, t2, -1  # i -= 1
-    add t3, t1, t2
-    lbu t3, 0(t3)    # let chr = program_text[program_curr_char]
-
-    li t4, '['
-    beq t3, t4, command_loop_end_dec_brackets  # brackets -= 1 if chr == '['
-    li t4, ']'
-    beq t3, t4, command_loop_end_inc_brackets  # brackets += 1 if chr == ']'
-    j command_loop_end_while_brackets
-
-    command_loop_end_inc_brackets:
-      addi t0, t0, 1
-      j command_loop_end_while_brackets
-    command_loop_end_dec_brackets:
-      addi t0, t0, -1
-      j command_loop_end_while_brackets
-
-  command_loop_end_while_brackets_end:
-
-  la t1, program_curr_char
-  sd t2, 0(t1)  # program_curr_char = i
-
-  command_loop_end_end:
-    ret
+command_loop_common:
+  # program_curr_char = program_loop_jumps[program_curr_char]
+  ld t0, program_loop_jumps
+  la t2, program_curr_char
+  ld t1, 0(t2)
+  slli t1, t1, 3
+  add t0, t0, t1
+  ld t0, 0(t0)
+  sd t0, 0(t2)
+command_loop_common_end:
+  ret
 
 syntax_error:
   # fn syntax_error() -> never
