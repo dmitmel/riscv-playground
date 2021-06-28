@@ -17,14 +17,18 @@
 /*  usize */ program_len:        /* = 0    */ .dword 0
 /*  usize */ program_curr_char:  /* = 0    */ .dword 0
 
-/* *usize */ program_loop_jumps: /* = NULL */ .dword 0
+/*  *char */ program_optimized:          /* = NULL */ .dword 0
+/* *usize */ program_optimizations_meta: /* = NULL */ .dword 0
+/*  usize */ program_optimized_len:      /* = 0    */ .dword 0
 
 .section .rodata
 
 /* usize */ PROGRAM_MEMORY_LEN: .dword 30000
 
-str_usage:        .string "usage: %s [code]\n"
-str_syntax_error: .string "syntax error\n"
+str_usage:         .string "usage: %s [code]\n"
+str_syntax_error:  .string "syntax error\n"
+str_pointer_error: .string "pointer error\n"
+str_print_addr:    .string "%p\n"
 
 .text
 
@@ -64,10 +68,16 @@ main:
   sd a0, 0(t0)
   mv s2, a0
 
-  # program_loop_jumps = malloc(sizeof(size_t) * program_len)
+  # program_optimized = malloc(sizeof(char) * program_len)
+  mv a0, s2
+  call malloc
+  la t0, program_optimized
+  sd a0, 0(t0)
+
+  # program_optimizations_meta = malloc(sizeof(isize) * program_len)
   slli a0, s2, 3
   call malloc
-  la t0, program_loop_jumps
+  la t0, program_optimizations_meta
   sd a0, 0(t0)
 
   # analyze_program()
@@ -80,14 +90,15 @@ main:
   la t0, program_memory_ptr
   sd a0, 0(t0)
 
-  # $s1 and $s2 have already been assigned
+  ld s1, program_optimized
+  ld s2, program_optimized_len
   la s3, program_curr_char
   main_for_i_start:
-    # break if program_curr_char >= program_len
+    # break if program_curr_char >= program_optimized_len
     ld t0, 0(s3)
     bgeu t0, s2, main_for_i_end
 
-    # process_command(program_text[program_curr_char])
+    # process_command(program_optimized[program_curr_char])
     add t0, s1, t0
     lbu a0, 0(t0)
     call process_command
@@ -99,8 +110,12 @@ main:
     j main_for_i_start
   main_for_i_end:
 
-  # free(program_loop_jumps)
-  ld a0, program_loop_jumps
+  # free(program_optimized)
+  ld a0, program_optimized
+  call free
+
+  # free(program_optimizations_meta)
+  ld a0, program_optimizations_meta
   call free
 
   # free(program_memory_ptr)
@@ -119,27 +134,35 @@ main:
 
 analyze_program:
   # fn analyze_program()
-  addi sp, sp, -80
-  sd ra,  0(sp)
-  sd s1,  8(sp)  # program_text
-  sd s2, 16(sp)  # program_len
-  sd s3, 24(sp)  # i
-  sd s4, 32(sp)  # jump_stack_cap
-  sd s5, 40(sp)  # jump_stack_len
-  sd s6, 48(sp)  # jump_stack
-  sd s7, 56(sp)  # chr
-  sd s8, 64(sp)  # jump_index
-  sd s9, 72(sp)  # program_loop_jumps
+  addi sp, sp, -96
+  sd ra,   0(sp)
+  sd s1,   8(sp)  # program_text
+  sd s2,  16(sp)  # program_len
+  sd s3,  24(sp)  # src_idx
+  sd s4,  32(sp)  # jump_stack_cap
+  sd s5,  40(sp)  # jump_stack_len
+  sd s6,  48(sp)  # jump_stack
+  sd s7,  56(sp)  # chr
+  sd s8,  64(sp)  # program_optimized
+  sd s9,  72(sp)  # program_optimizations_meta
+  sd s10, 80(sp)  # opt_idx
 
   ld s1, program_text
   ld s2, program_len
-  ld s9, program_loop_jumps
+  ld s8, program_optimized
+  ld s9, program_optimizations_meta
 
-  # memset(program_loop_jumps, 0xff, sizeof(size_t) * program_len)
+  # memset(program_optimizations_meta, 0xff, sizeof(isize) * program_len)
   mv a0, s9
   li a1, 0xff
   slli a2, s2, 3
   call memset
+
+  la s10, program_optimized_len # let opt_idx = &program_optimized_len
+
+  # *opt_idx = 0
+  li t0, 0
+  sd t0, 0(s10)
 
   # the default value of jump stack's capacity may be arbitrary
   li s4, 8  # let jump_stack_cap: usize = 8
@@ -150,22 +173,39 @@ analyze_program:
   call malloc
   mv s6, a0
 
-  li s3, 0  # let i: usize = 0
+  li s3, 0  # let src_idx: usize = 0
   analyze_program_for_i:
-    # break if i >= program_len
+    # break if src_idx >= program_len
     bgeu s3, s2, analyze_program_for_i_end
 
-    # let chr: char = program_text[i]
+    # let chr: char = program_text[src_idx]
     add t0, s1, s3
     lbu s7, 0(t0)
 
-    li t0, '['
-    beq s7, t0, analyze_program_if_loop_begin  # goto loop_begin if chr == '['
-    li t0, ']'
-    beq s7, t0, analyze_program_if_loop_end    # goto loop_end if chr == ']'
-    j analyze_program_if_end
+    # this will come in handy later
+    # let repeat_increment: isize = 1
+    li t2, 1
 
-    # if chr == '['
+    li t0, '['
+    beq s7, t0, analyze_program_if_loop_begin     # goto loop_begin if chr == '['
+    li t0, ']'
+    beq s7, t0, analyze_program_if_loop_end       # goto loop_end if chr == ']'
+    li t0, '+'
+    beq s7, t0, analyze_program_if_stackable      # goto stackable if chr == '+'
+    li t0, '-'
+    beq s7, t0, analyze_program_if_stackable_rev  # goto stackable_rev if chr == '-'
+    li t0, '<'
+    beq s7, t0, analyze_program_if_stackable_rev  # goto stackable_rev if chr == '<'
+    li t0, '>'
+    beq s7, t0, analyze_program_if_stackable      # goto stackable if chr == '>'
+    li t0, '.'
+    beq s7, t0, analyze_program_if_end            # goto end if chr == '.'
+    li t0, ','
+    beq s7, t0, analyze_program_if_end            # goto end if chr == ','
+
+    j analyze_program_for_i_continue              # else continue
+
+    # case '['
     analyze_program_if_loop_begin:
 
       # if jump_stack_len >= jump_stack_cap
@@ -174,7 +214,7 @@ analyze_program:
 
         slli s4, s4, 1  # jump_stack_cap *= 2
 
-        # jump_stack = realloc(jump_stack, sizeof(size_t) * jump_stack_cap)
+        # jump_stack = realloc(jump_stack, sizeof(usize) * jump_stack_cap)
         mv a0, s6
         slli a1, s4, 3
         call realloc
@@ -182,41 +222,92 @@ analyze_program:
 
       analyze_program_if_loop_begin_if_end:
 
-      # jump_stack[jump_stack_len] = i
+      # jump_stack[jump_stack_len] = *opt_idx
       slli t0, s5, 3
       add t0, s6, t0
-      sd s3, 0(t0)
+      ld t1, 0(s10)
+      sd t1, 0(t0)
 
       addi s5, s5, 1  # jump_stack_len += 1
 
       j analyze_program_if_end
 
-    # if chr == ']'
+    # case ']'
     analyze_program_if_loop_end:
 
       # syntax_error() if jump_stack_len <= 0
-      bgeu zero, s5, syntax_error
+      bgeu zero, s5, analyze_program_call_syntax_error
 
       addi s5, s5, -1  # jump_stack_len -= 1
 
       # let jump_index: usize = jump_stack[jump_stack_len]
       slli t0, s5, 3
       add t0, s6, t0
-      ld s8, 0(t0)
+      ld t1, 0(t0)
 
-      # program_loop_jumps[i] = jump_index
-      slli t0, s3, 3
-      add t0, s9, t0
-      sd s8, 0(t0)
+      # $t2 = *opt_idx
+      ld t2, 0(s10)
 
-      # program_loop_jumps[jump_index] = i
-      slli t0, s8, 3
+      # program_optimizations_meta[*opt_idx] = jump_index as isize
+      slli t0, t2, 3
       add t0, s9, t0
-      sd s3, 0(t0)
+      sd t1, 0(t0)
+
+      # program_optimizations_meta[jump_index] = *opt_idx as isize
+      slli t0, t1, 3
+      add t0, s9, t0
+      sd t2, 0(t0)
+
+      j analyze_program_if_end
+
+    # case '-'
+    # case '<'
+    analyze_program_if_stackable_rev:
+
+      li t2, -1  # repeat_increment = -1
+
+      # fallthrough
+
+    # case '+'
+    # case '>'
+    analyze_program_if_stackable:
+
+      mv t1, t2   # let repeats: isize = repeat_increment
+      analyze_program_if_stackable_for_j:
+        addi s3, s3, 1                                       # src_idx += 1
+        bgeu s3, s2, analyze_program_if_stackable_for_j_end  # break if src_idx >= program_len
+
+        # let next_chr: char = program_text[src_idx]
+        add t0, s1, s3
+        lbu t0, 0(t0)
+
+        bne t0, s7, analyze_program_if_stackable_for_j_end  # break if next_chr != chr
+        add t1, t1, t2                                      # repeats += repeat_increment
+
+        j analyze_program_if_stackable_for_j
+      analyze_program_if_stackable_for_j_end:
+
+      addi s3, s3, -1  # src_idx -= 1
+
+      # program_optimizations_meta[*opt_idx] = repeats
+      ld t2, 0(s10)
+      slli t0, t2, 3
+      add t0, s9, t0
+      sd t1, 0(t0)
 
     analyze_program_if_end:
 
-    addi s3, s3, 1  # i += 1
+    # program_optimized[*opt_idx] = chr
+    ld t1, 0(s10)
+    add t0, s8, t1
+    sb s7, 0(t0)
+
+    # *opt_idx += 1
+    addi t1, t1, 1
+    sd t1, 0(s10)
+
+  analyze_program_for_i_continue:
+    addi s3, s3, 1  # src_idx += 1
     j analyze_program_for_i
   analyze_program_for_i_end:
 
@@ -224,18 +315,22 @@ analyze_program:
   mv a0, s6
   call free
 
-  ld ra,  0(sp)
-  ld s1,  8(sp)
-  ld s2, 16(sp)
-  ld s3, 24(sp)
-  ld s4, 32(sp)
-  ld s5, 40(sp)
-  ld s6, 48(sp)
-  ld s7, 56(sp)
-  ld s8, 64(sp)
-  ld s9, 72(sp)
-  addi sp, sp, 80
+  ld ra,   0(sp)
+  ld s1,   8(sp)
+  ld s2,  16(sp)
+  ld s3,  24(sp)
+  ld s4,  32(sp)
+  ld s5,  40(sp)
+  ld s6,  48(sp)
+  ld s7,  56(sp)
+  ld s8,  64(sp)
+  ld s9,  72(sp)
+  ld s10, 80(sp)
+  addi sp, sp, 96
   ret
+
+  analyze_program_call_syntax_error:
+    call syntax_error
 
 
 process_command:
@@ -254,16 +349,16 @@ process_command:
     .rept '+' - 0x00
     j command_nop
     .endr
-    j command_increment   # 0x2B '+'
+    j command_add         # 0x2B '+'
     j command_read        # 0x2C ','
-    j command_decrement   # 0x2D '-'
+    j command_add         # 0x2D '-'
     j command_print       # 0x2E '.'
     .rept '<' - '.' - 1
     j command_nop
     .endr
-    j command_move_left   # 0x3C '<'
+    j command_move        # 0x3C '<'
     j command_nop
-    j command_move_right  # 0x3E '>'
+    j command_move        # 0x3E '>'
     .rept '[' - '>' - 1
     j command_nop
     .endr
@@ -332,32 +427,52 @@ command_move_left:
 
     ret
 
-command_increment:
-  # fn command_increment()
+command_move:
+  # fn command_move()
 
-  # let cell_ptr: *u8 = &program_memory_ptr[program_head_addr]
-  ld t0, program_memory_ptr
-  ld t1, program_head_addr
-  add t0, t0, t1
+  # let value: isize = program_optimizations_meta[program_curr_char]
+  ld t2, program_optimizations_meta
+  ld t3, program_curr_char
+  slli t3, t3, 3
+  add t2, t2, t3
+  ld t2, 0(t2)
 
-  # *cell_ptr += 1
-  lbu t1, 0(t0)
-  addi t1, t1, 1
-  sb t1, 0(t0)
+  # let new_addr: isize = program_head_addr as isize + value
+  la t0, program_head_addr
+  ld t1, 0(t0)
+  add t1, t1, t2
+
+  blt t1, zero, command_move_call_pointer_error  # pointer_error() if new_addr < 0
+  ld t2, PROGRAM_MEMORY_LEN
+  bge t1, t2, command_move_call_pointer_error    # pointer_error() if new_addr >= PROGRAM_MEMORY_LEN
+
+  # program_head_addr = new_addr as usize
+  sd t1, 0(t0)
 
   ret
 
-command_decrement:
-  # fn command_decrement()
+  command_move_call_pointer_error:
+    call pointer_error
+
+
+command_add:
+  # fn command_add()
 
   # let cell_ptr: *u8 = &program_memory_ptr[program_head_addr]
   ld t0, program_memory_ptr
   ld t1, program_head_addr
   add t0, t0, t1
 
-  # *cell_ptr -= 1
+  # let value: isize = program_optimizations_meta[program_curr_char]
+  ld t2, program_optimizations_meta
+  ld t3, program_curr_char
+  slli t3, t3, 3
+  add t2, t2, t3
+  ld t2, 0(t2)
+
+  # *cell_ptr += value as isize as u8
   lbu t1, 0(t0)
-  addi t1, t1, -1
+  add t1, t1, t2
   sb t1, 0(t0)
 
   ret
@@ -425,8 +540,8 @@ command_loop_end:
   beqz t1, command_loop_common_end
 
 command_loop_common:
-  # program_curr_char = program_loop_jumps[program_curr_char]
-  ld t0, program_loop_jumps
+  # program_curr_char = program_optimizations_meta[program_curr_char] as usize
+  ld t0, program_optimizations_meta
   la t2, program_curr_char
   ld t1, 0(t2)
   slli t1, t1, 3
@@ -447,6 +562,23 @@ syntax_error:
 
   # exit(2)
   li a0, 2
+  call exit
+
+  ld ra, 0(sp)
+  addi sp, sp, 16
+  ret
+
+pointer_error:
+  # fn pointer_error() -> never
+  addi sp, sp, -16
+  sd ra, 0(sp)
+
+  # printf(str_pointer_error)
+  la a0, str_pointer_error
+  call printf
+
+  # exit(3)
+  li a0, 3
   call exit
 
   ld ra, 0(sp)

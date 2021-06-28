@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
 
 
 def main(argv: List[str]) -> int:
@@ -49,7 +49,7 @@ def main(argv: List[str]) -> int:
   print("  call calloc")
   print("  mv s1, a0")
 
-  code = ''.join(c for c in code if c in "+,-.<>[]")
+  code = "".join(c for c in code if c in "+,-.<>[]")
   code = code.replace("[-]", "Z")
   code = code.replace("[+]", "Z")
 
