@@ -379,54 +379,6 @@ command_nop:
 
   ret
 
-command_move_right:
-  # fn command_move_right()
-
-  la t0, program_head_addr
-  ld t1, 0(t0)
-  ld t2, PROGRAM_MEMORY_LEN
-
-  # goto wraparound if program_head_addr >= PROGRAM_MEMORY_LEN - 1
-  addi t2, t2, -1
-  bgeu t1, t2, command_move_right_wraparound
-
-  # program_head_addr += 1
-  addi t1, t1, 1
-  sd t1, 0(t0)
-
-  ret
-
-  command_move_right_wraparound:
-    # program_head_addr = 0
-    li t1, 0
-    sd t1, 0(t0)
-
-    ret
-
-command_move_left:
-  # fn command_move_left()
-
-  la t0, program_head_addr
-  ld t1, 0(t0)
-
-  # goto wraparound if program_head_addr <= 0
-  li t2, 0
-  bgeu t2, t1, command_move_left_wraparound
-
-  # program_head_addr -= 1
-  addi t1, t1, -1
-  sd t1, 0(t0)
-
-  ret
-
-  command_move_left_wraparound:
-    # program_head_addr = PROGRAM_MEMORY_LEN - 1
-    ld t1, PROGRAM_MEMORY_LEN
-    addi t1, t1, -1
-    sd t1, 0(t0)
-
-    ret
-
 command_move:
   # fn command_move()
 
