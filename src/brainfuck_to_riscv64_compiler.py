@@ -84,9 +84,16 @@ def main(argv: List[str]) -> int:
 
   for i, (c, cr) in enumerate(code_rle):
 
+    def emit_addi(reg: str, n: int) -> None:
+      if -(1 << 11) <= n < (1 << 11):
+        print("  addi {}, {}, {}".format(reg, reg, n))
+      else:
+        print("  li t1, {}".format(n))
+        print("  add {}, {}, t1".format(reg, reg))
+
     if c == "+":
       print("  lbu t0, 0(s1)")
-      print("  addi t0, t0, {}".format(cr))
+      emit_addi("t0", cr)
       print("  sb t0, 0(s1)")
 
     elif c == ",":
@@ -95,7 +102,7 @@ def main(argv: List[str]) -> int:
 
     elif c == "-":
       print("  lbu t0, 0(s1)")
-      print("  addi t0, t0, {}".format(-cr))
+      emit_addi("t0", -cr)
       print("  sb t0, 0(s1)")
 
     elif c == ".":
@@ -103,10 +110,10 @@ def main(argv: List[str]) -> int:
       print("  call bf_putchar")
 
     elif c == "<":
-      print("  addi s1, s1, {}".format(-cr * 8))
+      emit_addi("s1", -cr * 8)
 
     elif c == ">":
-      print("  addi s1, s1, {}".format(cr * 8))
+      emit_addi("s1", cr * 8)
 
     elif c == "[":
       print("bf_loop_{}_start:".format(i))
