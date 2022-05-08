@@ -9,15 +9,16 @@
 .data
 
 /* char* */ STR_FMT_GENERATION: .string "generation #%lu:\n"
-# UTF-8 representation of two FULL BLOCK (U+2588) unicode characters
-# https://www.fileformat.info/info/unicode/char/2588/index.htm
-/* char* */ STR_CELL_ALIVE: .string "\xE2\x96\x88\xE2\x96\x88"
-/* char* */ STR_CELL_DEAD:  .string "  "
+# An "array" of four characters: the space character and Unicode characters
+# U+2580, U+2584 and U+2588 (<https://en.wikipedia.org/wiki/Block_Elements>).
+/* char* */ STR_CELL_GFX: .string " \0\0\0\xe2\x96\x80\0\xe2\x96\x84\0\xe2\x96\x88\0"
+/* char* */ STR_NEWLINE:  .string "\n"
 
-/* u64 */ grid_width:  .dword 32
-/* u64 */ grid_height: .dword 32
-/* [u8] */ grid_data:      /* = NULL */ .dword 0
-/* [u8] */ grid_next_data: /* = NULL */ .dword 0
+/* u64 */ grid_width:  .dword 64
+/* u64 */ grid_height: .dword 64
+/* [u8] */ grid_data:       /* = NULL */ .dword 0
+/* [u8] */ grid_next_data:  /* = NULL */ .dword 0
+/* char* */ grid_print_str: /* = NULL */ .dword 0
 
 /* u64 */ NEXT_GENERATION_SLEEP_TIME: .dword 200 * 1000 /* microseconds */
 
@@ -108,6 +109,10 @@ main:
   call free
   # free(grid_next_data)
   ld a0, grid_next_data
+  call free
+
+  # free(grid_print_str)
+  ld a0, grid_print_str
   call free
 
   li a0, 0  # return 0
@@ -206,12 +211,33 @@ grid_print:
   sd s3, 24(sp)
   sd s4, 32(sp)
   sd s5, 40(sp)
+  sd s6, 48(sp)
+  sd s7, 56(sp)
 
   ld s1, grid_data    # let cell_ptr: u8* = grid_data
   ld s2, grid_width
   ld s3, grid_height
   li s4, 0            # let x: u64 = 0
   li s5, 0            # let y: u64 = 0
+  li s7, 3            # let cell_str_max_len: u64 = 3
+
+  ld s6, grid_print_str
+  # if grid_print_str == NULL
+  bnez s6, grid_print_if_alloc_str_end
+  # let grid_print_str_len: u64 = (grid_width * cell_str_max_len + 1) * (grid_height / 2)
+  mul a0, s2, s7
+  addi a0, a0, 1
+  srli t0, s3, 1
+  mul a0, a0, t0
+  # grid_print_str = malloc(grid_print_str_len + 1)
+  addi a0, a0, 1
+  call malloc
+  la t0, grid_print_str
+  sd a0, 0(t0)
+  mv s6, a0
+  grid_print_if_alloc_str_end:
+  # grid_print_str[0] = 0
+  sb zero, 0(s6)
 
   grid_print_for_x_start:
     # break if y >= grid_height
@@ -227,29 +253,48 @@ grid_print:
       lb t0, 0(s1)
       andi t0, t0, 1
 
-      # use an `if` shorthand here to save some instructions
-      # let s: char* = STR_CELL_DEAD
-      la a0, STR_CELL_DEAD
-      # if (t0 != 0) s = STR_CELL_ALIVE
-      beqz t0, grid_print_if_end
-      la a0, STR_CELL_ALIVE
-      grid_print_if_end:
-      # fputs(s, stdout)
-      ld a1, stdout
-      call fputs
+      # let next_cell: u8 = 0
+      li t1, 0
+      # if (y + 1 < width) next_cell = *(cell_ptr + width) & 1
+      addi t2, s5, 1
+      bgeu t2, s3, grid_print_next_cell_if_end
+      add t1, s1, s2
+      lb t1, 0(t1)
+      andi t1, t1, 1
+      grid_print_next_cell_if_end:
+
+      # let cell_str: char* = STR_CELL_GFX + (cell | (next_cell << 1)) * (cell_str_max_len + 1)
+      slli t1, t1, 1
+      or t0, t0, t1
+      addi t1, s7, 1
+      mul t0, t0, t1
+      la a1, STR_CELL_GFX
+      add a1, a1, t0
+      # strncat(grid_print_str, cell_str, cell_str_max_len)
+      mv a0, s6
+      mv a2, s7
+      call strncat
 
       addi s1, s1, 1  # cell_ptr += 1
       addi s4, s4, 1  # x += 1
       j grid_print_for_y_start
     grid_print_for_y_end:
 
-    # putchar('\n')
-    li a0, '\n'
-    call putchar
+    # strncat(grid_print_str, "\n", 1)
+    mv a0, s6
+    la a1, STR_NEWLINE
+    li a2, 1
+    call strncat
 
-    addi s5, s5, 1  # y += 1
+    add s1, s1, s2  # cell_ptr += width
+    addi s5, s5, 2  # y += 2
     j grid_print_for_x_start
   grid_print_for_x_end:
+
+  # fputs(grid_print_str, stdout)
+  mv a0, s6
+  ld a1, stdout
+  call fputs
 
   ld ra,  0(sp)
   ld s1,  8(sp)
@@ -257,6 +302,8 @@ grid_print:
   ld s3, 24(sp)
   ld s4, 32(sp)
   ld s5, 40(sp)
+  ld s6, 48(sp)
+  ld s7, 56(sp)
   addi sp, sp, 64
   ret
 
