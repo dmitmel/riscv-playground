@@ -1,3 +1,4 @@
+# vim:ft=riscv:
 # brainfuck.s
 # Written in 2019-2021 by Dmytro Meleshko <dmytro.meleshko@gmail.com>
 # To the extent possible under law, the author(s) have dedicated all copyright

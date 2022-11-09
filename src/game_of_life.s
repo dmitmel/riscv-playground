@@ -1,3 +1,4 @@
+# vim:ft=riscv:
 # game_of_life.s
 # Written in 2019 by Dmytro Meleshko <dmytro.meleshko@gmail.com>
 # To the extent possible under law, the author(s) have dedicated all copyright
